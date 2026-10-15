@@ -51,6 +51,11 @@ th{color:var(--muted);font-weight:600}
         <input type="date" id="date" required>
       </div>
       <div>
+        <label for="agent">Agent name</label>
+        <input type="text" id="agent" required>
+        <div class="hint">Remembered on this device.</div>
+      </div>
+      <div>
         <label for="reservation">Reservation</label>
         <select id="reservation" required>
           <option value="">Select</option>
@@ -75,7 +80,7 @@ th{color:var(--muted);font-weight:600}
         <label for="hotel">Hotel code</label>
         <input type="text" id="hotel" required maxlength="12" style="text-transform:uppercase">
       </div>
-      <div>
+      <div class="full">
         <label for="reason">Reason for the call</label>
         <select id="reason" required>
           <option value="">Select a reason</option>
@@ -118,8 +123,8 @@ th{color:var(--muted);font-weight:600}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 (function(){
-  var KEY="callLog.entries";
-  var HEAD=["Call date","Reservation","Master","Telephone number","Hotel code","Reason for the call","Comments","Logged at"];
+  var KEY="callLog.entries", AGENT="callLog.agent";
+  var HEAD=["Call date","Agent","Reservation","Master","Telephone number","Hotel code","Reason for the call","Comments","Logged at"];
   var $=function(id){return document.getElementById(id)};
   var entries=[];
 
@@ -136,7 +141,7 @@ th{color:var(--muted);font-weight:600}
     var chain=Promise.resolve();
     todo.forEach(function(e){
       chain=chain.then(function(){
-        var p={id:e.id,date:e.date,reservation:e.reservation,master:e.master,phone:e.phone,hotel:e.hotel,reason:e.reason,comments:e.comments,logged:e.logged};
+        var p={id:e.id,date:e.date,agent:e.agent,reservation:e.reservation,master:e.master,phone:e.phone,hotel:e.hotel,reason:e.reason,comments:e.comments,logged:e.logged};
         return fetch(FLOW_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify(p)})
           .then(function(r){if(!r.ok)throw new Error(r.status);e.sent=true;save();render()});
       });
@@ -150,7 +155,7 @@ th{color:var(--muted);font-weight:600}
   function today(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
   function stamp(){var d=new Date(),p=function(n){return String(n).padStart(2,"0")};return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
   function say(t,err){var m=$("msg");m.textContent=t;m.className=err?"err":"";clearTimeout(say.t);say.t=setTimeout(function(){m.textContent=""},4000)}
-  function row(e){return [e.date,e.reservation||e.agent||"",e.master||"",e.phone,e.hotel,e.reason,e.comments,e.logged]}
+  function row(e){return [e.date,e.agent||"",e.reservation||"",e.master||"",e.phone,e.hotel,e.reason,e.comments,e.logged]}
   function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML}
 
   function render(){
@@ -177,9 +182,9 @@ th{color:var(--muted);font-weight:600}
     var data=[HEAD].concat(entries.map(row));
     if(window.XLSX){
       var ws=XLSX.utils.aoa_to_sheet(data);
-      ws["!cols"]=[12,14,10,18,12,22,40,20].map(function(w){return{wch:w}});
+      ws["!cols"]=[12,16,14,10,18,12,22,40,20].map(function(w){return{wch:w}});
       // keep phone numbers as text so Excel does not reformat them
-      for(var r=1;r<data.length;r++){var c=ws[XLSX.utils.encode_cell({r:r,c:3})];if(c){c.t="s";c.z="@"}}
+      for(var r=1;r<data.length;r++){var c=ws[XLSX.utils.encode_cell({r:r,c:4})];if(c){c.t="s";c.z="@"}}
       var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Calls");
       XLSX.writeFile(wb,"call-log-"+stamp+".xls",{bookType:"biff8"});
     }else{
@@ -193,13 +198,14 @@ th{color:var(--muted);font-weight:600}
   $("callForm").addEventListener("submit",function(ev){
     ev.preventDefault();
     var e={
-      date:$("date").value,reservation:$("reservation").value,master:$("master").value,phone:$("phone").value.trim(),
+      date:$("date").value,agent:$("agent").value.trim(),reservation:$("reservation").value,master:$("master").value,phone:$("phone").value.trim(),
       hotel:$("hotel").value.trim().toUpperCase(),reason:$("reason").value,
       comments:$("comments").value.trim(),logged:stamp(),
       id:Date.now()+"-"+Math.random().toString(36).slice(2,8),sent:false
     };
     entries.push(e);
     if(!save()){entries.pop();say("Could not save. Browser storage is blocked.",true);return}
+    try{localStorage.setItem(AGENT,e.agent)}catch(x){}
     $("reservation").value="";$("master").value="";$("phone").value="";$("hotel").value="";$("reason").value="";$("comments").value="";
     $("date").value=today();render();say("Call saved on this device.");$("phone").focus();
     sync();
@@ -215,6 +221,7 @@ th{color:var(--muted);font-weight:600}
 
   load();
   $("date").value=today();
+  try{$("agent").value=localStorage.getItem(AGENT)||""}catch(e){}
   render();
   sync();
 })();
