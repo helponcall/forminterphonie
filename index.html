@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Call Log</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1c2430;--muted:#5d6877;--line:#d5dae1;--accent:#0b5cad;--accent-ink:#fff;--ok:#1a7f4b;--bad:#b3261e;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#14181e;--card:#1d232b;--ink:#e8ecf1;--muted:#9aa5b4;--line:#333c48;--accent:#5aa3f0;--accent-ink:#0a1420;--ok:#4cc38a;--bad:#ff8a80;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.5rem;margin:0 0 4px}
+h2{font-size:1.1rem;margin:0}
+.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:20px;margin-bottom:20px}
+form{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.full{grid-column:1/-1}
+label{display:block;font-weight:600;font-size:.92rem;margin-bottom:4px}
+.opt{font-weight:400;color:var(--muted)}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:9px 10px}
+textarea{min-height:84px;resize:vertical}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.hint{font-size:.8rem;color:var(--muted);margin-top:3px}
+button{font:inherit;font-weight:600;border-radius:6px;padding:10px 16px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.danger{color:var(--bad)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+#msg{min-height:1.4em;font-weight:600;color:var(--ok)}
+#msg.err{color:var(--bad)}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td.wrap{white-space:normal;min-width:160px}
+th{color:var(--muted);font-weight:600}
+.empty{color:var(--muted);margin:0}
+@media (max-width:560px){form{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Call log</h1>
+  <p class="sub">Record each incoming call, then download the log as an Excel file.</p>
+
+  <section class="card" aria-labelledby="f-title">
+    <h2 id="f-title" style="margin-bottom:14px">New call</h2>
+    <form id="callForm" autocomplete="off">
+      <div>
+        <label for="date">Call date</label>
+        <input type="date" id="date" required>
+      </div>
+      <div>
+        <label for="agent">Agent name</label>
+        <input type="text" id="agent" required>
+        <div class="hint">Remembered on this device.</div>
+      </div>
+      <div>
+        <label for="phone">Telephone number</label>
+        <input type="tel" id="phone" required pattern="\+?[0-9 ]{7,18}" inputmode="tel" placeholder="23057123456">
+        <div class="hint">Digits only, with country code.</div>
+      </div>
+      <div>
+        <label for="hotel">Hotel code</label>
+        <input type="text" id="hotel" required maxlength="12" style="text-transform:uppercase">
+      </div>
+      <div class="full">
+        <label for="reason">Reason for the call</label>
+        <select id="reason" required>
+          <option value="">Select a reason</option>
+          <option>Booking change</option>
+          <option>Cancellation</option>
+          <option>Payment issue</option>
+          <option>Complaint</option>
+          <option>General inquiry</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="full">
+        <label for="comments">Comments <span class="opt">(optional)</span></label>
+        <textarea id="comments"></textarea>
+      </div>
+      <div class="full actions">
+        <button type="submit" class="primary">Save call</button>
+        <span id="msg" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="card" aria-labelledby="l-title">
+    <div class="bar">
+      <h2 id="l-title">Saved calls (<span id="count">0</span>) <span id="pending" class="opt"></span></h2>
+      <div class="actions">
+        <button type="button" class="primary" id="xlsBtn">Download Excel (.xls)</button>
+        <button type="button" class="danger" id="clearBtn">Clear log</button>
+      </div>
+    </div>
+    <div class="scroll" id="tableWrap"></div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+  var KEY="callLog.entries", AGENT="callLog.agent";
+  var HEAD=["Call date","Agent","Telephone number","Hotel code","Reason for the call","Comments","Logged at"];
+  var $=function(id){return document.getElementById(id)};
+  var entries=[];
+
+  // Paste the "HTTP POST URL" from your Power Automate flow between the quotes.
+  var FLOW_URL="https://default51d765206fd24190bf1dec8ec69343.01.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/04/workflows/125098511d994f98ac3d3fa14fccc581/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=ARmJa2uxFQ5C-Vhvc52MBy3ktZXXWIq5yUiDBaz4JbE";
+  var syncing=false;
+
+  // Sends every call not yet confirmed by SharePoint. Failed calls stay on this device and retry later.
+  function sync(){
+    if(!FLOW_URL||syncing)return Promise.resolve();
+    var todo=entries.filter(function(e){return !e.sent});
+    if(!todo.length)return Promise.resolve();
+    syncing=true;
+    var chain=Promise.resolve();
+    todo.forEach(function(e){
+      chain=chain.then(function(){
+        var p={id:e.id,date:e.date,agent:e.agent,phone:e.phone,hotel:e.hotel,reason:e.reason,comments:e.comments,logged:e.logged};
+        return fetch(FLOW_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify(p)})
+          .then(function(r){if(!r.ok)throw new Error(r.status);e.sent=true;save();render()});
+      });
+    });
+    return chain.then(function(){say("Call saved to SharePoint.")},function(){say("Saved on this device, not yet sent to SharePoint. It will retry automatically.",true)})
+      .then(function(){syncing=false;render()});
+  }
+
+  function load(){try{entries=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){entries=[]}}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(entries));return true}catch(e){return false}}
+  function today(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
+  function stamp(){var d=new Date(),p=function(n){return String(n).padStart(2,"0")};return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
+  function say(t,err){var m=$("msg");m.textContent=t;m.className=err?"err":"";clearTimeout(say.t);say.t=setTimeout(function(){m.textContent=""},4000)}
+  function row(e){return [e.date,e.agent,e.phone,e.hotel,e.reason,e.comments,e.logged]}
+  function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML}
+
+  function render(){
+    $("count").textContent=entries.length;
+    var n=entries.filter(function(e){return !e.sent}).length;
+    $("pending").textContent=!FLOW_URL?"SharePoint not connected":(n?n+" waiting to send to SharePoint":"all sent to SharePoint");
+    var w=$("tableWrap");
+    if(!entries.length){w.innerHTML='<p class="empty">No calls saved yet. Fill in the form above and select Save call.</p>';return}
+    var h="<table><thead><tr>"+HEAD.map(function(x){return"<th>"+x+"</th>"}).join("")+"</tr></thead><tbody>";
+    entries.slice().reverse().forEach(function(e){
+      h+="<tr>"+row(e).map(function(v,i){return'<td'+(i===5?' class="wrap"':'')+'>'+esc(v||"")+"</td>"}).join("")+"</tr>";
+    });
+    w.innerHTML=h+"</tbody></table>";
+  }
+
+  function download(blob,name){
+    var a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;
+    document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(a.href)},1000);
+  }
+
+  function exportXls(){
+    if(!entries.length){say("Nothing to download yet.",true);return}
+    var stamp=today();
+    var data=[HEAD].concat(entries.map(row));
+    if(window.XLSX){
+      var ws=XLSX.utils.aoa_to_sheet(data);
+      ws["!cols"]=[12,16,18,12,22,40,20].map(function(w){return{wch:w}});
+      // keep phone numbers as text so Excel does not reformat them
+      for(var r=1;r<data.length;r++){var c=ws[XLSX.utils.encode_cell({r:r,c:2})];if(c){c.t="s";c.z="@"}}
+      var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Calls");
+      XLSX.writeFile(wb,"call-log-"+stamp+".xls",{bookType:"biff8"});
+    }else{
+      // fallback if the Excel library could not load: CSV opens in Excel
+      var csv="\ufeff"+data.map(function(r){return r.map(function(v){return'"'+String(v==null?"":v).replace(/"/g,'""')+'"'}).join(",")}).join("\r\n");
+      download(new Blob([csv],{type:"text/csv;charset=utf-8"}),"call-log-"+stamp+".csv");
+      say("Excel library unavailable, downloaded CSV instead.",true);
+    }
+  }
+
+  $("callForm").addEventListener("submit",function(ev){
+    ev.preventDefault();
+    var e={
+      date:$("date").value,agent:$("agent").value.trim(),phone:$("phone").value.trim(),
+      hotel:$("hotel").value.trim().toUpperCase(),reason:$("reason").value,
+      comments:$("comments").value.trim(),logged:stamp(),
+      id:Date.now()+"-"+Math.random().toString(36).slice(2,8),sent:false
+    };
+    entries.push(e);
+    if(!save()){entries.pop();say("Could not save. Browser storage is blocked.",true);return}
+    try{localStorage.setItem(AGENT,e.agent)}catch(x){}
+    $("phone").value="";$("hotel").value="";$("reason").value="";$("comments").value="";
+    $("date").value=today();render();say("Call saved on this device.");$("phone").focus();
+    sync();
+  });
+
+  $("xlsBtn").addEventListener("click",exportXls);
+  $("clearBtn").addEventListener("click",function(){
+    if(!entries.length)return;
+    if(confirm("Delete all "+entries.length+" saved calls? Download the Excel file first if you need them.")){
+      entries=[];save();render();say("Log cleared.");
+    }
+  });
+
+  load();
+  $("date").value=today();
+  try{$("agent").value=localStorage.getItem(AGENT)||""}catch(e){}
+  render();
+  sync();
+})();
+</script>
+</body>
+</html>
