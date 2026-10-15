@@ -49,13 +49,22 @@ th{color:var(--muted);font-weight:600}
     <h2 id="f-title" style="margin-bottom:14px">New call</h2>
     <form id="callForm" autocomplete="off">
       <div>
-        <label for="date">Call date</label>
-        <input type="date" id="date" required>
-      </div>
-      <div>
         <label for="agent">Agent name</label>
         <input type="text" id="agent" required>
         <div class="hint">Saved on this device after your first call.</div>
+      </div>
+      <div>
+        <label for="talking">Talking</label>
+        <select id="talking" required>
+          <option value="">Select</option>
+          <option>Yes</option>
+          <option>No</option>
+        </select>
+        <div class="hint">Select Yes to fill in the call details.</div>
+      </div>
+      <div>
+        <label for="date">Call date</label>
+        <input type="date" id="date" required>
       </div>
       <div>
         <label for="reservation">Reservation</label>
@@ -99,19 +108,11 @@ th{color:var(--muted);font-weight:600}
           <option>Others</option>
         </select>
       </div>
-      <div>
-        <label for="talking">Talking</label>
-        <select id="talking" required>
-          <option value="">Select</option>
-          <option>Yes</option>
-          <option>No</option>
-        </select>
-        <div class="hint">Yes: a comment is required.</div>
-      </div>
       <div class="full">
         <label for="comments">Comments <span class="opt" id="cNote">(optional)</span></label>
         <textarea id="comments"></textarea>
       </div>
+
       <div class="full actions">
         <button type="submit" class="primary">Save call</button>
         <span id="msg" role="status" aria-live="polite"></span>
@@ -206,11 +207,16 @@ th{color:var(--muted);font-weight:600}
     }
   }
 
+  var GATED=["date","reservation","master","phone","hotel","reason","comments"];
   function applyTalking(){
-    var t=$("talking").value,c=$("comments"),n=$("cNote");
-    if(t==="Yes"){c.disabled=false;c.required=true;n.textContent="(required)"}
-    else if(t==="No"){c.value="";c.required=false;c.disabled=true;n.textContent="(not needed)"}
-    else{c.disabled=false;c.required=false;n.textContent="(optional)"}
+    var t=$("talking").value,yes=(t==="Yes");
+    GATED.forEach(function(id){
+      var el=$(id);
+      if(!yes){el.value=(id==="date")?today():""}
+      el.disabled=!yes;
+    });
+    $("comments").required=yes;
+    $("cNote").textContent=yes?"(required)":(t==="No"?"(not needed)":"(optional)");
   }
   $("talking").addEventListener("change",applyTalking);
 
@@ -226,7 +232,7 @@ th{color:var(--muted);font-weight:600}
     if(!save()){entries.pop();say("Could not save. Browser storage is blocked.",true);return}
     try{localStorage.setItem(AGENT,e.agent)}catch(x){}
     $("reservation").value="";$("master").value="";$("talking").value="";applyTalking();$("phone").value="";$("hotel").value="";$("reason").value="";$("comments").value="";
-    $("date").value=today();render();say("Call saved on this device.");$("phone").focus();
+    $("date").value=today();render();say("Call saved on this device.");$("talking").focus();
     sync();
   });
 
