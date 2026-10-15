@@ -53,7 +53,6 @@ th{color:var(--muted);font-weight:600}
       <div>
         <label for="agent">Agent name</label>
         <input type="text" id="agent" required>
-        <div class="hint">Remembered on this device.</div>
       </div>
       <div>
         <label for="reservation">Reservation</label>
@@ -205,7 +204,6 @@ th{color:var(--muted);font-weight:600}
     };
     entries.push(e);
     if(!save()){entries.pop();say("Could not save. Browser storage is blocked.",true);return}
-    try{localStorage.setItem(AGENT,e.agent)}catch(x){}
     $("reservation").value="";$("master").value="";$("phone").value="";$("hotel").value="";$("reason").value="";$("comments").value="";
     $("date").value=today();render();say("Call saved on this device.");$("phone").focus();
     sync();
@@ -221,7 +219,7 @@ th{color:var(--muted);font-weight:600}
 
   load();
   $("date").value=today();
-  try{$("agent").value=localStorage.getItem(AGENT)||""}catch(e){}
+  try{localStorage.removeItem(AGENT)}catch(e){}
   render();
   sync();
 })();
