@@ -20,6 +20,7 @@ label{display:block;font-weight:600;font-size:.92rem;margin-bottom:4px}
 .opt{font-weight:400;color:var(--muted)}
 input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:9px 10px}
 textarea{min-height:84px;resize:vertical}
+textarea:disabled{opacity:.4;cursor:not-allowed;background:#0d0f12}
 input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
 .hint{font-size:.8rem;color:var(--muted);margin-top:3px}
 button{font:inherit;font-weight:600;border-radius:6px;padding:10px 16px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
@@ -81,7 +82,7 @@ th{color:var(--muted);font-weight:600}
         <label for="hotel">Hotel code</label>
         <input type="text" id="hotel" required maxlength="12" style="text-transform:uppercase">
       </div>
-      <div class="full">
+      <div>
         <label for="reason">Reason for the call</label>
         <select id="reason" required>
           <option value="">Select a reason</option>
@@ -98,8 +99,17 @@ th{color:var(--muted);font-weight:600}
           <option>Others</option>
         </select>
       </div>
+      <div>
+        <label for="talking">Talking</label>
+        <select id="talking" required>
+          <option value="">Select</option>
+          <option>Yes</option>
+          <option>No</option>
+        </select>
+        <div class="hint">Yes: a comment is required.</div>
+      </div>
       <div class="full">
-        <label for="comments">Comments <span class="opt">(optional)</span></label>
+        <label for="comments">Comments <span class="opt" id="cNote">(optional)</span></label>
         <textarea id="comments"></textarea>
       </div>
       <div class="full actions">
@@ -125,7 +135,7 @@ th{color:var(--muted);font-weight:600}
 <script>
 (function(){
   var KEY="callLog.entries", AGENT="callLog.agent";
-  var HEAD=["Call date","Agent","Reservation","Master","Telephone number","Hotel code","Reason for the call","Comments","Logged at"];
+  var HEAD=["Call date","Agent","Reservation","Master","Telephone number","Hotel code","Reason for the call","Talking","Comments","Logged at"];
   var $=function(id){return document.getElementById(id)};
   var entries=[];
 
@@ -142,7 +152,7 @@ th{color:var(--muted);font-weight:600}
     var chain=Promise.resolve();
     todo.forEach(function(e){
       chain=chain.then(function(){
-        var p={id:e.id,date:e.date,agent:e.agent,reservation:e.reservation,master:e.master,phone:e.phone,hotel:e.hotel,reason:e.reason,comments:e.comments,logged:e.logged};
+        var p={id:e.id,date:e.date,agent:e.agent,reservation:e.reservation,master:e.master,phone:e.phone,hotel:e.hotel,reason:e.reason,talking:e.talking,comments:e.comments,logged:e.logged};
         return fetch(FLOW_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify(p)})
           .then(function(r){if(!r.ok)throw new Error(r.status);e.sent=true;save();render()});
       });
@@ -156,7 +166,7 @@ th{color:var(--muted);font-weight:600}
   function today(){var d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
   function stamp(){var d=new Date(),p=function(n){return String(n).padStart(2,"0")};return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds())}
   function say(t,err){var m=$("msg");m.textContent=t;m.className=err?"err":"";clearTimeout(say.t);say.t=setTimeout(function(){m.textContent=""},4000)}
-  function row(e){return [e.date,e.agent||"",e.reservation||"",e.master||"",e.phone,e.hotel,e.reason,e.comments,e.logged]}
+  function row(e){return [e.date,e.agent||"",e.reservation||"",e.master||"",e.phone,e.hotel,e.reason,e.talking||"",e.comments,e.logged]}
   function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML}
 
   function render(){
@@ -183,7 +193,7 @@ th{color:var(--muted);font-weight:600}
     var data=[HEAD].concat(entries.map(row));
     if(window.XLSX){
       var ws=XLSX.utils.aoa_to_sheet(data);
-      ws["!cols"]=[12,16,14,10,18,12,22,40,20].map(function(w){return{wch:w}});
+      ws["!cols"]=[12,16,14,10,18,12,22,10,40,20].map(function(w){return{wch:w}});
       // keep phone numbers as text so Excel does not reformat them
       for(var r=1;r<data.length;r++){var c=ws[XLSX.utils.encode_cell({r:r,c:4})];if(c){c.t="s";c.z="@"}}
       var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Calls");
@@ -196,18 +206,26 @@ th{color:var(--muted);font-weight:600}
     }
   }
 
+  function applyTalking(){
+    var t=$("talking").value,c=$("comments"),n=$("cNote");
+    if(t==="Yes"){c.disabled=false;c.required=true;n.textContent="(required)"}
+    else if(t==="No"){c.value="";c.required=false;c.disabled=true;n.textContent="(not needed)"}
+    else{c.disabled=false;c.required=false;n.textContent="(optional)"}
+  }
+  $("talking").addEventListener("change",applyTalking);
+
   $("callForm").addEventListener("submit",function(ev){
     ev.preventDefault();
     var e={
       date:$("date").value,agent:$("agent").value.trim(),reservation:$("reservation").value,master:$("master").value,phone:$("phone").value.trim(),
-      hotel:$("hotel").value.trim().toUpperCase(),reason:$("reason").value,
+      hotel:$("hotel").value.trim().toUpperCase(),reason:$("reason").value,talking:$("talking").value,
       comments:$("comments").value.trim(),logged:stamp(),
       id:Date.now()+"-"+Math.random().toString(36).slice(2,8),sent:false
     };
     entries.push(e);
     if(!save()){entries.pop();say("Could not save. Browser storage is blocked.",true);return}
     try{localStorage.setItem(AGENT,e.agent)}catch(x){}
-    $("reservation").value="";$("master").value="";$("phone").value="";$("hotel").value="";$("reason").value="";$("comments").value="";
+    $("reservation").value="";$("master").value="";$("talking").value="";applyTalking();$("phone").value="";$("hotel").value="";$("reason").value="";$("comments").value="";
     $("date").value=today();render();say("Call saved on this device.");$("phone").focus();
     sync();
   });
@@ -223,6 +241,7 @@ th{color:var(--muted);font-weight:600}
   load();
   $("date").value=today();
   try{$("agent").value=localStorage.getItem(AGENT)||""}catch(e){}
+  applyTalking();
   render();
   sync();
 })();
