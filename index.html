@@ -97,7 +97,6 @@ th{color:var(--muted);font-weight:600}
           <option>Yes</option>
           <option>No</option>
         </select>
-        <div class="hint">Yes: the telephone number can be entered.</div>
       </div>
       <div>
         <label for="phone">Telephone number</label>
@@ -224,12 +223,7 @@ th{color:var(--muted);font-weight:600}
     }
   }
 
-  var GATED=["date","reservation","master","fieldname","anonymous","hotel","reason","comments"];
-  function applyAnon(){
-    var ok=($("talking").value==="Yes"&&$("anonymous").value==="Yes"),ph=$("phone");
-    if(!ok)ph.value="";
-    ph.disabled=!ok;
-  }
+  var GATED=["date","reservation","master","fieldname","anonymous","phone","hotel","reason","comments"];
   function applyTalking(){
     var t=$("talking").value,yes=(t==="Yes");
     GATED.forEach(function(id){
@@ -237,12 +231,10 @@ th{color:var(--muted);font-weight:600}
       if(!yes){el.value=(id==="date")?today():""}
       el.disabled=!yes;
     });
-    applyAnon();
     $("comments").required=yes;
     $("cNote").textContent=yes?"(required)":(t==="No"?"(not needed)":"(optional)");
   }
   $("talking").addEventListener("change",applyTalking);
-  $("anonymous").addEventListener("change",applyAnon);
 
   $("callForm").addEventListener("submit",function(ev){
     ev.preventDefault();
